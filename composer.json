@@ -1,5 +1,5 @@
 {
-  "name": "advancedideasmechanics/antivirus",
+  "name": "advancedideasmechanics/antivirus-fiesta",
   "description": "PHP ClamAV library for scanning files, locally or via sockets",
   "type": "library",
   "keywords": [
@@ -8,7 +8,9 @@
     "clamav",
     "php",
     "antivirus",
-    "library"
+    "library",
+    "antivirus",
+    "antivirus-fiesta"
   ],
   "authors": [
     {
