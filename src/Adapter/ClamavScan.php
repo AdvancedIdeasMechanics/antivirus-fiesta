@@ -5,7 +5,7 @@
  * Date: 8/8/18
  * Time: 9:00 AM
  */
-namespace Matthewpallotta\Clamavphp\Adapter;
+namespace Advancedideasmechanics\Antivirus\Adapter;
 
 use Advancedideasmechanics\Antivirus\Adapter\ClamavSocket;
 
