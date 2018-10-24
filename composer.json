@@ -1,0 +1,41 @@
+{
+  "name": "advancedideasmechanics/antivirus",
+  "description": "PHP ClamAV library for scanning files, locally or via sockets",
+  "type": "library",
+  "keywords": [
+    "matthewpallotta",
+    "advancedideasmechanics",
+    "clamav",
+    "php"
+  ],
+  "authors": [
+    {
+      "name":"Matthew Pallotta",
+      "email": "matt@advanced.im",
+      "homepage": "https://advanced.im"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/advancedideasmechanics/antivirus-fiesta/issues",
+    "email": "support@advanced.im",
+    "source": "https://github.com/advancedideasmechanics/antivirus-fiesta"
+  },
+  "homepage": "https://www.advanced.im/antivirus",
+  "license": "MIT",
+  "require": {
+    "php": "^7.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Advancedideasmechanics\\Antivirus\\": "src/"
+    }
+  },
+  "scripts": {
+    "check": [
+      "@cs-check",
+      "@test"
+    ],
+    "cs-check": "phpcs",
+    "cs-fix": "phpcbf"
+  }
+}
