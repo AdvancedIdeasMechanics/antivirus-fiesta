@@ -1,0 +1,154 @@
+name: Build Tag Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  semgrep-scans:
+    name: Scan Unique Id Generator
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep (Docker)
+        run: |
+          echo "Starting Semgrep scan..."
+          docker run --rm -v "${PWD}:/src" semgrep/semgrep \
+          semgrep scan \
+          --config "p/php" \
+          --json --output semgrep-results.json \
+          --severity ERROR \
+          --verbose || true
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::148514950564:role/github-scanner-role
+          aws-region: us-east-1
+
+      - name: Upload Report to S3 & Email Link
+        env:
+          BUCKET: ${{ secrets.SECURITY_BUCKET }}
+          SENDER: ${{ secrets.SECURITY_SENDER }}
+          RECIPIENT: ${{ secrets.SECURITY_RECP }}
+        run: |
+          OBJECT_KEY="scans/dev/unique-id-generator/run-${{ github.run_id }}.json"
+          if [ -f "semgrep-results.json" ]; then
+            aws s3 cp semgrep-results.json "s3://$BUCKET/$OBJECT_KEY"  --quiet
+            LINK=$(aws s3 presign "s3://$BUCKET/$OBJECT_KEY" --expires-in 3600)
+            JSON_MSG=$(jq -n \
+              --arg link "$LINK" \
+              --arg subject "Security Scan: ${{ github.repository }}" \
+              '{
+                "Subject": { "Data": $subject, "Charset": "UTF-8" },
+                "Body": {
+                  "Text": { "Data": ("Report available here (1hr):\n" + $link), "Charset": "UTF-8" }
+                }
+              }')
+
+            # 5. Send Email
+            aws ses send-email \
+              --from "$SENDER" \
+              --destination "ToAddresses=$RECIPIENT" \
+              --message "$JSON_MSG" \
+              --region "$AWS_REGION"
+
+            echo "Email sent successfully."
+          else
+            echo "::warning::No SARIF file generated. Skipping upload."
+          fi
+
+      - name: Filter JSON with jq
+        run: |
+          cat semgrep-results.json | jq '.results' > filtered-results.json
+
+      - name: Upload Results to OpenObserve
+        if: always()
+        uses: mdp/openobserve_github_action_logs@main
+        with:
+          openobserve_endpoint: "${{ secrets.OPENOBSERVE_ENDPOINT }}/githubaction/_json"
+          openobserve_username: ${{ secrets.OPENOBSERVE_USERNAME }}
+          openobserve_key: ${{ secrets.OPENOBSERVE_KEY }}
+          github_token: ${{ secrets.OPENOBSERVE_GITHUB_TOKEN }}
+
+      - name: Block builds on failure
+        run: |
+          if grep -q '"level": "error"' filtered-results.json; then
+            echo "::error::Critical security vulnerabilities found. Deployment cancelled."
+            exit 1
+          fi
+
+  build:
+    needs: semgrep-scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create version file
+        run: echo ${{ github.sha }} > version
+        shell: bash
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, xml, zip, ldap, pdo, pdo_mysql
+
+      - name: Check Composer Version
+        run: composer --version
+
+      - name: Install Dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Create release archive
+        run: zip -r release.zip . -x '*.git*'
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: release.zip
+          overwrite: true
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release.zip
+          asset_name: antivirus-fiesta-${{ github.ref_name }}.zip
+          asset_content_type: application/zip
