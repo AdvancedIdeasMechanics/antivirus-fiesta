@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   semgrep-scans:
-    name: Scan Unique Id Generator
+    name: Scan Antivirus-fiesta
     runs-on: ubuntu-latest
 
     permissions:
@@ -79,7 +79,7 @@ jobs:
         if: always()
         uses: mdp/openobserve_github_action_logs@main
         with:
-          openobserve_endpoint: "${{ secrets.OPENOBSERVE_ENDPOINT }}/githubaction/_json"
+          openobserve_endpoint: "${{ secrets.OPENOBSERVE_ENDPOINT }}/githubactions/_json"
           openobserve_username: ${{ secrets.OPENOBSERVE_USERNAME }}
           openobserve_key: ${{ secrets.OPENOBSERVE_KEY }}
           github_token: ${{ secrets.OPENOBSERVE_GITHUB_TOKEN }}
@@ -127,6 +127,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
